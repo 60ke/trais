@@ -29,7 +29,7 @@ func LogInit(level, path string) {
 		fileCore,
 		StdoutCore,
 	)
-	Logger = zap.New(teeCore).Sugar()
+	Logger = zap.New(teeCore, zap.WithCaller(true)).Sugar()
 }
 
 func LogReload(level, path string) {

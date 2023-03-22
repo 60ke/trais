@@ -21,29 +21,6 @@ package db
 //     v = BigIntegerField()
 //     value = CharField()
 
-type Transaction struct {
-	ID               int64  `gorm:"primaryKey",column:bsc_current_block`
-	Hash             string `gorm:"column:hash"`
-	Timestamp        int64  `gorm:"column:timestamp"`
-	BlockHash        string `gorm:"column:blockHash"`
-	BlockNumber      int64  `gorm:"column:blockNumber"`
-	Gas              int64  `gorm:"column:blockNumber"`
-	GasPrice         int64
-	Fee              int64
-	GasUsed          int64
-	Nonce            int64
-	R                string
-	S                string
-	V                string
-	Source           string
-	To               string
-	TransactionIndex int64
-	TxStr            string `gorm:"type:text"`
-	// 从python项目迁移而来暂时不清楚此字段的作用
-	Type  int
-	Value string
-}
-
 type Transaction1 struct {
 	ID               int64  `gorm:"primaryKey",column:bsc_current_block`
 	BlockHash        string `json:"blockHash"`

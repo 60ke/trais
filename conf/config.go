@@ -19,6 +19,7 @@ var (
 	ServerSetting   = &Server{}
 	DatabaseSetting = &Mysql{}
 	TaskSetting     = &Task{}
+	BscHosts        = &[]string{}
 )
 
 type Server struct {
@@ -49,9 +50,9 @@ type Task struct {
 
 var cfg *ini.File
 
-func ConfInit() {
+func ConfInit(path string) {
 	var err error
-	cfg, err = ini.Load("conf/conf.ini")
+	cfg, err = ini.Load(path)
 	if err != nil {
 		log.Logger.Fatalf("setting.Setup, fail to parse 'conf.ini': %v", err)
 	}
@@ -60,6 +61,11 @@ func ConfInit() {
 	mapTo("server", ServerSetting)
 	mapTo("database", DatabaseSetting)
 	mapTo("task", TaskSetting)
+
+	rpcs := cfg.Section("cluster")
+
+	*BscHosts = rpcs.Key("bschost").Strings(",")
+
 	ServerSetting.ReadTimeout = ServerSetting.ReadTimeout * time.Second
 	ServerSetting.WriteTimeout = ServerSetting.WriteTimeout * time.Second
 
