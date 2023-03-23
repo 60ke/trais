@@ -20,13 +20,15 @@ func (m *Info) TableName() string {
 }
 
 type BscAddress struct {
-	ID       int64  `gorm:"column:id;primary_key;AUTO_INCREMENT" json:"id"`
-	Address  string `gorm:"column:address;NOT NULL" json:"address"`
-	Received string `gorm:"column:received;NOT NULL" json:"received"`
-	Sent     string `gorm:"column:sent;NOT NULL" json:"sent"`
-	Balance  int64  `gorm:"column:balance;NOT NULL" json:"balance"`
-	Time     int64  `gorm:"column:time;NOT NULL" json:"time"`
-	TxCount  int64  `gorm:"column:txCount;NOT NULL" json:"txCount"`
+	ID      int64  `gorm:"column:id;primary_key;AUTO_INCREMENT" json:"id"`
+	Address string `gorm:"column:address;NOT NULL" json:"address"`
+	Balance int64  `gorm:"column:balance;NOT NULL" json:"balance"`
+	Time    int64  `gorm:"column:time;NOT NULL" json:"time"`
+
+	// 原有项目未存下面三行数据,当前亦未存储
+	Received string `gorm:"column:received" json:"received"`
+	Sent     string `gorm:"column:sent" json:"sent"`
+	TxCount  int64  `gorm:"column:txCount" json:"txCount"`
 }
 
 func (m *BscAddress) TableName() string {
@@ -38,40 +40,41 @@ func (m *BscAddress) TableName() string {
 */
 type BscTransactionTable struct {
 	ID int64 `gorm:"column:id;primary_key;AUTO_INCREMENT" json:"id"`
-	BscTransaction
-	Timestamp int64 `gorm:"column:timestamp" json:"timestamp"`
+	BscTransactionCommon
+
+	Gas              int64 `gorm:"column:gas" json:"gas"`
+	GasPrice         int64 `gorm:"column:gasPrice" json:"gasPrice"`
+	Nonce            int64 `gorm:"column:nonce" json:"nonce"`
+	V                int64 `gorm:"column:v" json:"v"`
+	GasUsed          int64 `gorm:"column:gasUsed" json:"gasUsed"`
+	Timestamp        int64 `gorm:"column:timestamp" json:"timestamp"`
+	BlockNumber      int64 `gorm:"column:blockNumber;NOT NULL" json:"blockNumber"`
+	TransactionIndex int64 `gorm:"column:transactionIndex" json:"transactionIndex"`
+	Type             int   `gorm:"column:type" json:"type"`
 	// gas * gasPrice
 	Fee int64 `gorm:"column:fee" json:"fee"`
 }
 
-type BscTransaction struct {
-	BlockHash   string `gorm:"column:blockHash;NOT NULL" json:"blockHash"`
-	BlockNumber int64  `gorm:"column:blockNumber;NOT NULL" json:"blockNumber"`
+type BscTransactionCommon struct {
+	BlockHash string `gorm:"column:blockHash;NOT NULL" json:"blockHash"`
 	// json字段为from,原有的python项目使用source,这里使用已有的数据库字段
-	From             string `gorm:"column:source" json:"from"`
-	To               string `gorm:"column:to" json:"to"`
-	Gas              int64  `gorm:"column:gas" json:"gas"`
-	GasPrice         int64  `gorm:"column:gasPrice" json:"gasPrice"`
-	Nonce            int64  `gorm:"column:nonce" json:"nonce"`
-	Hash             string `gorm:"column:hash" json:"hash"`
-	TransactionIndex int64  `gorm:"column:transactionIndex" json:"transactionIndex"`
-	Value            string `gorm:"column:value" json:"value"`
-	V                int64  `gorm:"column:v" json:"v"`
-	R                string `gorm:"column:r" json:"r"`
-	S                string `gorm:"column:s" json:"s"`
-	GasUsed          int64  `gorm:"column:gasUsed" json:"gasUsed"`
-	Timestamp        int64  `gorm:"column:timestamp" json:"timestamp"`
+	From  string `gorm:"column:source" json:"from"`
+	To    string `gorm:"column:to" json:"to"`
+	Hash  string `gorm:"column:hash" json:"hash"`
+	Value string `gorm:"column:value" json:"value"`
+	R     string `gorm:"column:r" json:"r"`
+	S     string `gorm:"column:s" json:"s"`
 	// json字段为input,原有的python项目使用tx_str,这里使用已有的数据库字段
 	Input string `gorm:"column:tx_str" json:"input"`
-	Type  int    `gorm:"column:type" json:"type"`
 }
 
 func (m *BscTransactionTable) TableName() string {
 	return "transaction"
 }
 
-type BscBlock struct {
-	Number           int64  `gorm:"column:number;NOT NULL" json:"number"`
+// 与web3 rpc公用的字段
+type BscBlockCommon struct {
+	// Number           int64  `gorm:"column:number;NOT NULL" json:"number"`
 	Hash             string `gorm:"column:hash;NOT NULL" json:"hash"`
 	ParentHash       string `gorm:"column:parentHash;NOT NULL" json:"parentHash"`
 	Nonce            string `gorm:"column:nonce" json:"nonce"`
@@ -84,23 +87,31 @@ type BscBlock struct {
 	Difficulty       string `gorm:"column:difficulty" json:"difficulty"`
 	TotalDifficulty  string `gorm:"column:totalDifficulty" json:"totalDifficulty"`
 	ExtraData        string `gorm:"column:extraData" json:"extraData"`
-	Size             int64  `gorm:"column:size" json:"size"`
-	GasLimit         int64  `gorm:"column:gasLimit" json:"gasLimit"`
-	GasUsed          int64  `gorm:"column:gasUsed" json:"gasUsed"`
-	Timestamp        int64  `gorm:"column:timestamp" json:"timestamp"`
+	// Size             int64  `gorm:"column:size" json:"size"`
+	// GasLimit         int64  `gorm:"column:gasLimit" json:"gasLimit"`
+	// GasUsed          int64  `gorm:"column:gasUsed" json:"gasUsed"`
+	// Timestamp        int64  `gorm:"column:timestamp" json:"timestamp"`
 }
 
 // TransactionsCount,UncleCount,BlockReward
 type BscBlockTable struct {
 	ID int64 `gorm:"column:id;primary_key;AUTO_INCREMENT" json:"id"`
-	BscBlock
+	BscBlockCommon
+
+	GasLimit  int64 `gorm:"column:gasLimit" json:"gasLimit"`
+	GasUsed   int64 `gorm:"column:gasUsed" json:"gasUsed"`
+	Timestamp int64 `gorm:"column:timestamp" json:"timestamp"`
+	Number    int64 `gorm:"column:number;NOT NULL" json:"number"`
+
+	// BlockReward现有项目未用到,数据库无数据
 	BlockReward       int64 `gorm:"column:blockReward" json:"blockReward"`
 	TransactionsCount int64 `gorm:"column:transactionsCount" json:"transactionsCount"`
 	UncleCount        int64 `gorm:"column:uncleCount" json:"uncleCount"`
 	// 下面三字段来源于TrustNodeScore
 	CreditData  string `gorm:"column:credit_data" json:"credit_data"`
 	CreditValue string `gorm:"column:credit_value" json:"credit_value"`
-	CreditMax   int64  `gorm:"column:credit_max" json:"credit_max"`
+	// miner的当前的(可信值是递增的/最大)可信值
+	CreditMax int64 `gorm:"column:credit_max" json:"credit_max"`
 	// TotalFee现有项目未用到,数据库无数据
 	TotalFee int64 `gorm:"column:total_fee" json:"total_fee"`
 	// IsComputed现有项目未用到,数据库无数据

@@ -7,6 +7,7 @@ replace github.com/60ke/trais => ../trias
 require (
 	github.com/ethereum/go-ethereum v1.11.4
 	github.com/go-ini/ini v1.67.0
+	github.com/hnlq715/golang-lru v0.3.1
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/robfig/cron/v3 v3.0.1
 	go.uber.org/zap v1.24.0

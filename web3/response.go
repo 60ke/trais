@@ -8,18 +8,44 @@ type LatestBlockNumberResp struct {
 	Result  string `json:"result"`
 }
 
+type BscRpcBalance struct {
+	Jsonrpc string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Result  string `json:"result"`
+}
+
+type BscRpcTransaction struct {
+	db.BscTransactionCommon
+	Gas              string `gorm:"column:gas" json:"gas"`
+	GasPrice         string `gorm:"column:gasPrice" json:"gasPrice"`
+	Nonce            string `gorm:"column:nonce" json:"nonce"`
+	V                string `gorm:"column:v" json:"v"`
+	GasUsed          string `gorm:"column:gasUsed" json:"gasUsed"`
+	Timestamp        string `gorm:"column:timestamp" json:"timestamp"`
+	BlockNumber      string `gorm:"column:blockNumber;NOT NULL" json:"blockNumber"`
+	TransactionIndex string `gorm:"column:transactionIndex" json:"transactionIndex"`
+	Type             string `gorm:"column:type" json:"type"`
+}
+
 // eth_getBlockByNumber with true
-type BscBlockResp struct {
+type BscRpcBlock struct {
 	Jsonrpc string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Result  struct {
-		db.BscBlock
+		db.BscBlockCommon
+
+		Size      string `gorm:"column:size" json:"size"`
+		GasLimit  string `gorm:"column:gasLimit" json:"gasLimit"`
+		GasUsed   string `gorm:"column:gasUsed" json:"gasUsed"`
+		Timestamp string `gorm:"column:timestamp" json:"timestamp"`
+		Number    string `gorm:"column:number;NOT NULL" json:"number"`
+
 		// 数据库未存此字段
 		MixHash      string              `json:"mixHash"`
-		Transactions []db.BscTransaction `json:"transactions"`
+		Transactions []BscRpcTransaction `json:"transactions"`
 		// CreditData,CreditValue,CreditMax
 		TrustNodeScore string `json:"trustNodeScore"`
 		// TODO 暂未发现json uncles具体数据
-		Uncles []interface{} `json:"uncles"`
+		Uncles []string `json:"uncles"`
 	} `json:"result"`
 }

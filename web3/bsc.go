@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/60ke/trais/tools"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 var BSCTIMEOUT = 5
@@ -42,7 +41,7 @@ func GetTxrByHash(rpc, hash string) {
 
 }
 
-func GetBalance(rpc string, addr common.Address) ([]byte, error) {
+func GetBalance(rpc string, addr string) ([]byte, error) {
 	var data = strings.NewReader(fmt.Sprintf(`{
 		"jsonrpc":"2.0",
 		"method":"eth_getBalance",
@@ -51,6 +50,6 @@ func GetBalance(rpc string, addr common.Address) ([]byte, error) {
 			"latest"
 		],
 		"id":1
-	}`, addr.Hex()))
+	}`, addr))
 	return tools.Post(rpc, BSCTIMEOUT, data)
 }

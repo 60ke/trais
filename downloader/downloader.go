@@ -10,12 +10,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/60ke/trais/conf"
 	"github.com/60ke/trais/log"
 
 	"github.com/60ke/trais/db"
 
 	"github.com/60ke/trais/web3"
+	lru "github.com/hnlq715/golang-lru"
 	"gorm.io/gorm"
+)
+
+var (
+	// 获取失败的区块
+	FailedBlock, _ = lru.NewARCWithExpire(1000, 0)
+	// 最近60s内的交易的账户地址
+	LatestAddr, _ = lru.NewARCWithExpire(1000, 10)
 )
 
 type GetBlockResult struct {
@@ -27,17 +36,21 @@ type GetBlockResult struct {
 
 func SyncBsc(hosts []string) error {
 	var wg sync.WaitGroup
+	var bscStep = conf.DownloaderSetting.BscStep
+	var resp web3.LatestBlockNumberResp
+
 	bestRpc := GetBestRpc(hosts)
 	body, err := web3.LatestBlockNumber(bestRpc)
 	if err != nil {
 		log.Logger.Error(err)
 		return err
 	}
-	var resp web3.LatestBlockNumberResp
+
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	err = decoder.Decode(&resp)
 	if err != nil {
+		log.Logger.Error(string(body))
 		log.Logger.Error(err)
 		return err
 	}
@@ -55,9 +68,9 @@ func SyncBsc(hosts []string) error {
 		return err
 	}
 
-	// 限制追块最大数量为10
-	if endNum-startNum > 10 {
-		endNum = startNum + 10
+	// 限制追块最大数量
+	if endNum-startNum > bscStep {
+		endNum = startNum + bscStep
 	}
 
 	// 开始追块
@@ -67,7 +80,7 @@ func SyncBsc(hosts []string) error {
 		wg.Add(1)
 		go func(i int64, results chan GetBlockResult) {
 			defer wg.Done()
-			getBscBlock(bestRpc, i, results)
+			GetBscBlock(bestRpc, i, results)
 		}(i, results)
 	}
 	wg.Wait()
@@ -77,22 +90,23 @@ func SyncBsc(hosts []string) error {
 	for result := range results {
 		if !result.Succ {
 			log.Logger.Warnf("get block failed: %d", result.BlockNum)
+			// FailedBlock.Add(result.BlockNum, nil)
 			// TODO addFailBlock,removeFail
 			// addFailBlock(result.BlockNum)
 		}
 	}
-	if latestNum-endNum < 10 {
+	if latestNum-endNum < bscStep {
 		// 落后较少时,可以sleep一下减少资源占用
 		time.Sleep(1 * time.Second)
 	}
 	return nil
 }
 
-func getBscBlock(rpc string, num int64, results chan GetBlockResult) {
+func GetBscBlock(rpc string, num int64, results chan GetBlockResult) {
 	// TODO 解析区块并存入数据库
 	// 使用LRU/缓存更新账户地址余额
 
-	var resp web3.BscBlockResp
+	var resp web3.BscRpcBlock
 	var getBlockResult GetBlockResult
 	getBlockResult.BlockNum = num
 
@@ -106,6 +120,7 @@ func getBscBlock(rpc string, num int64, results chan GetBlockResult) {
 		err = decoder.Decode(&resp)
 		if err != nil {
 			log.Logger.Error(err)
+			FailedBlock.Add(num, nil)
 			getBlockResult.Succ = false
 		} else {
 			insertBscBlock(resp)
@@ -117,13 +132,85 @@ func getBscBlock(rpc string, num int64, results chan GetBlockResult) {
 
 }
 
-func insertBscBlock(resp web3.BscBlockResp) {
+func insertBscBlock(resp web3.BscRpcBlock) {
+	var tx db.BscTransactionTable
+	block, txs := BscRpcBlock2Table(resp)
+	db.BscDB.Table(block.TableName()).Create(&block)
+	db.BscDB.Table(tx.TableName()).Create(&txs)
+}
+
+func BscRpcBlock2Table(resp web3.BscRpcBlock) (db.BscBlockTable, []db.BscTransactionTable) {
 	var block db.BscBlockTable
-	block.BscBlock = resp.Result.BscBlock
+	// var txs []db.BscTransactionTable
+	block.BscBlockCommon = resp.Result.BscBlockCommon
 	block.TransactionsCount = int64(len(resp.Result.Transactions))
 	block.UncleCount = int64(len(resp.Result.Uncles))
-	db.BscDB.Table(block.TableName()).Create(block)
-	// TODO parse trustScore,insert bsc txs
+	block.CreditData = resp.Result.TrustNodeScore
+	block.CreditValue, block.CreditMax = ParseTrustNodeScore(block.CreditData, resp.Result.Miner)
+	block.GasLimit = Hex2int64(resp.Result.GasLimit)
+	block.GasUsed = Hex2int64(resp.Result.GasUsed)
+	block.Timestamp = Hex2int64(resp.Result.Timestamp)
+	log.Logger.Info(resp.Result.Number)
+	block.Number = Hex2int64(resp.Result.Number)
+	txs := BscRpcTx2Table(resp.Result.Transactions)
+	// TODO-----
+	return block, txs
+}
+
+func BscRpcTx2Table(txs []web3.BscRpcTransaction) []db.BscTransactionTable {
+	var txTables []db.BscTransactionTable
+	for _, tx := range txs {
+		var txTable db.BscTransactionTable
+		txTable.BscTransactionCommon = tx.BscTransactionCommon
+		txTable.Gas = Hex2int64(tx.Gas)
+		txTable.GasPrice = Hex2int64(tx.GasPrice)
+		txTable.GasUsed = Hex2int64(tx.GasUsed)
+		txTable.Timestamp = Hex2int64(tx.Timestamp)
+		txTable.BlockNumber = Hex2int64(tx.BlockNumber)
+		txTable.TransactionIndex = Hex2int64(tx.TransactionIndex)
+		txTable.Nonce = Hex2int64(tx.Nonce)
+		txTable.V = Hex2int64(tx.V)
+		txTable.Type = int(Hex2int64(tx.Type))
+		LatestAddr.Add(tx.From, nil)
+		LatestAddr.Add(tx.To, nil)
+
+		txTables = append(txTables, txTable)
+	}
+	return txTables
+}
+
+func ParseTrustNodeScore(trustNodeScore, miner string) (string, int64) {
+	trustNodeScore = strings.TrimPrefix(trustNodeScore, "0x")
+	miner = strings.TrimPrefix(miner, "0x")
+	trustLen := len(trustNodeScore) / 52
+	var creditMax int64
+	var creditValue string = "["
+	for i := 0; i < trustLen; i++ {
+		trustData := trustNodeScore[i*52 : (i+1)*52]
+		addr := trustData[:40]
+		score, _ := strconv.ParseInt(trustData[44:], 16, 64)
+		if strings.EqualFold(addr, miner) {
+			creditMax = score
+		}
+		data := fmt.Sprintf("{\"%s\": %d},", addr, score)
+		creditValue += data
+	}
+	creditValue = creditValue[:len(creditValue)-1] + "]"
+	return creditValue, creditMax
+}
+
+func Hex2int64(hexStr string) int64 {
+	var num int64
+	hexStr = strings.TrimPrefix(hexStr, "0x")
+	if hexStr != "" {
+		var err error
+		num, err = strconv.ParseInt(hexStr, 16, 64)
+		if err != nil {
+			log.Logger.Error(err)
+		}
+	}
+
+	return num
 }
 
 func getBscStartNum() int64 {
@@ -150,12 +237,21 @@ func GetBestRpc(hosts []string) string {
 		var elapsed time.Duration
 		rpc := fmt.Sprintf("http://%s:8545", host)
 		start := time.Now()
-		_, err := web3.LatestBlockNumber(rpc)
-		if err == nil {
-			elapsed = time.Since(start)
-		} else {
+		body, err := web3.LatestBlockNumber(rpc)
+		if err != nil {
 			log.Logger.Error(err)
+			continue
 		}
+
+		var resp web3.LatestBlockNumberResp
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		err = decoder.Decode(&resp)
+		if err != nil {
+			log.Logger.Error(err)
+			continue
+		}
+		elapsed = time.Since(start)
 
 		if latency == 0*time.Second || latency > elapsed {
 			latency = elapsed

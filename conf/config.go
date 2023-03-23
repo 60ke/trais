@@ -8,21 +8,27 @@ import (
 	"github.com/go-ini/ini"
 )
 
-// APP
-type APP struct {
+var (
+	APPSetting        = &APPConf{}
+	ServerSetting     = &ServerConf{}
+	DatabaseSetting   = &MysqlConf{}
+	TaskSetting       = &TaskConf{}
+	BscHosts          = &[]string{}
+	DownloaderSetting = &DownloaderConf{}
+)
+
+// APPConf
+type APPConf struct {
 	LogLevel string
 	LogName  string
 }
 
-var (
-	APPSetting      = &APP{}
-	ServerSetting   = &Server{}
-	DatabaseSetting = &Mysql{}
-	TaskSetting     = &Task{}
-	BscHosts        = &[]string{}
-)
+type DownloaderConf struct {
+	BscStep int64
+	TMStep  int64
+}
 
-type Server struct {
+type ServerConf struct {
 	// 后端服务运行模式release or debug
 	RunMode string
 	// 后端服务端口
@@ -34,7 +40,7 @@ type Server struct {
 }
 
 // 数据库相关配置
-type Mysql struct {
+type MysqlConf struct {
 	User     string
 	Password string
 	Host     string
@@ -43,9 +49,10 @@ type Mysql struct {
 }
 
 // 任务定时配置
-type Task struct {
-	BscSync string
-	TMSync  string
+type TaskConf struct {
+	BscSync          string
+	TMSync           string
+	UpdateBscBalance string
 }
 
 var cfg *ini.File
@@ -61,6 +68,7 @@ func ConfInit(path string) {
 	mapTo("server", ServerSetting)
 	mapTo("database", DatabaseSetting)
 	mapTo("task", TaskSetting)
+	mapTo("downloader", DownloaderSetting)
 
 	rpcs := cfg.Section("cluster")
 
