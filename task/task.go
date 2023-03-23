@@ -1,4 +1,4 @@
-package main
+package task
 
 import (
 	"bytes"
@@ -10,11 +10,13 @@ import (
 	"github.com/60ke/trais/db"
 	"github.com/60ke/trais/downloader"
 	"github.com/60ke/trais/log"
+	"github.com/60ke/trais/tools"
 	"github.com/60ke/trais/web3"
 	"github.com/robfig/cron/v3"
 )
 
 func StartTask() {
+	log.Logger.Info("StartTask")
 	c := cron.New()
 
 	updateBscBalance := conf.TaskSetting.UpdateBscBalance
@@ -87,4 +89,36 @@ func HandleFailBlock(hosts []string) {
 	}
 
 	wg.Wait()
+}
+
+/*
+当前程序使用并发,可能由于断电等异常造成程序退出
+重新处理最近一次的1000(步进)块
+*/
+func HandleLastTask(hosts []string) {
+	var nums []int64
+	var wg sync.WaitGroup
+	bestRpc := downloader.GetBestRpc(hosts)
+
+	db.BscDB.Table("block").Model(db.BscBlockTable{}).Order("number desc").Limit(int(conf.DownloaderSetting.BscStep)).Select("Number").Find(&nums)
+	maxNum, minNum := nums[len(nums)-1], nums[0]
+	for i := int64(0); maxNum < minNum; i++ {
+		block := nums[len(nums)-1] + i
+		if !tools.SliceContain(nums, block) {
+			// 获取数据库中未爬取的块
+			nums = append(nums, block)
+		}
+	}
+
+	for _, num := range nums {
+		wg.Add(1)
+		go func(num int64) {
+			defer wg.Done()
+			downloader.GetBscBlock(bestRpc, num)
+		}(num)
+	}
+
+	wg.Wait()
+	log.Logger.Info("HandleLastTask Done")
+
 }

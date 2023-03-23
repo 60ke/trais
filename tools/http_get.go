@@ -51,3 +51,12 @@ func Post(url string, timeout int, payload *strings.Reader) ([]byte, error) {
 	}
 	return body, nil
 }
+
+func SliceContain[Item comparable](items []Item, item Item) bool {
+	for i := 0; i < len(items); i++ {
+		if items[i] == item {
+			return true
+		}
+	}
+	return false
+}

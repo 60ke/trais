@@ -35,61 +35,63 @@ type GetBlockResult struct {
 }
 
 func SyncBsc(hosts []string) error {
-	var wg sync.WaitGroup
-	var bscStep = conf.DownloaderSetting.BscStep
-	var resp web3.LatestBlockNumberResp
+	for {
+		log.Logger.Info("start SyncBsc")
+		var wg sync.WaitGroup
+		var bscStep = conf.DownloaderSetting.BscStep
+		var resp web3.LatestBlockNumberResp
 
-	bestRpc := GetBestRpc(hosts)
-	body, err := web3.LatestBlockNumber(bestRpc)
-	if err != nil {
-		log.Logger.Error(err)
-		return err
-	}
+		bestRpc := GetBestRpc(hosts)
+		body, err := web3.LatestBlockNumber(bestRpc)
+		if err != nil {
+			log.Logger.Error(err)
+			continue
+		}
 
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&resp)
-	if err != nil {
-		log.Logger.Error(string(body))
-		log.Logger.Error(err)
-		return err
-	}
-	startNum := getBscStartNum()
-	resp.Result = strings.TrimPrefix(resp.Result, "0x")
-	latestNum, err := strconv.ParseInt(resp.Result, 16, 64)
-	endNum := latestNum
-	if err != nil {
-		log.Logger.Error(err)
-		return err
-	}
-	if startNum > latestNum {
-		err := fmt.Errorf("数据库区块号:%d,大于当前链的最新区块:%d", startNum, latestNum)
-		log.Logger.Error(err)
-		return err
-	}
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		err = decoder.Decode(&resp)
+		if err != nil {
+			log.Logger.Error(string(body))
+			log.Logger.Error(err)
+			continue
+		}
+		startNum := getBscStartNum()
+		resp.Result = strings.TrimPrefix(resp.Result, "0x")
+		latestNum, err := strconv.ParseInt(resp.Result, 16, 64)
+		endNum := latestNum
+		if err != nil {
+			log.Logger.Error(err)
+			continue
+		}
+		if startNum > latestNum {
+			err := fmt.Errorf("数据库区块号:%d,大于当前链的最新区块:%d", startNum, latestNum)
+			log.Logger.Error(err)
+			continue
+		}
 
-	// 限制追块最大数量
-	if endNum-startNum > bscStep {
-		endNum = startNum + bscStep
-	}
+		// 限制追块最大数量
+		if endNum-startNum > bscStep {
+			endNum = startNum + bscStep
+		}
 
-	// 开始追块
-	// results := make(chan GetBlockResult, endNum-startNum+1)
+		// 开始追块
+		// results := make(chan GetBlockResult, endNum-startNum+1)
 
-	for i := startNum; i <= endNum; i++ {
-		wg.Add(1)
-		go func(i int64) {
-			defer wg.Done()
-			GetBscBlock(bestRpc, i)
-		}(i)
-	}
-	wg.Wait()
+		for i := startNum; i <= endNum; i++ {
+			wg.Add(1)
+			go func(i int64) {
+				defer wg.Done()
+				GetBscBlock(bestRpc, i)
+			}(i)
+		}
+		wg.Wait()
 
-	if latestNum-endNum < bscStep {
-		// 落后较少时,可以sleep一下减少资源占用
-		time.Sleep(1 * time.Second)
+		if latestNum-endNum < bscStep {
+			// 落后较少时,可以sleep一下减少资源占用
+			time.Sleep(1 * time.Second)
+		}
 	}
-	return nil
 }
 
 func GetBscBlock(rpc string, num int64) {
@@ -99,7 +101,7 @@ func GetBscBlock(rpc string, num int64) {
 	var resp web3.BscRpcBlock
 	var getBlockResult GetBlockResult
 	getBlockResult.BlockNum = num
-
+	log.Logger.Info(num)
 	data, err := web3.GetBlockByNum(rpc, fmt.Sprintf("0x%x", num))
 	if err != nil {
 		log.Logger.Error(err)
@@ -123,8 +125,11 @@ func GetBscBlock(rpc string, num int64) {
 func insertBscBlock(resp web3.BscRpcBlock) {
 	var tx db.BscTransactionTable
 	block, txs := BscRpcBlock2Table(resp)
-	db.BscDB.Table(block.TableName()).Create(&block)
-	db.BscDB.Table(tx.TableName()).Create(&txs)
+	db.BscDB.Table(block.TableName()).Where("number = ?", block.Number).FirstOrCreate(&block)
+	if len(txs) > 0 {
+		db.BscDB.Table(tx.TableName()).Create(&txs)
+	}
+
 }
 
 func BscRpcBlock2Table(resp web3.BscRpcBlock) (db.BscBlockTable, []db.BscTransactionTable) {
@@ -138,7 +143,7 @@ func BscRpcBlock2Table(resp web3.BscRpcBlock) (db.BscBlockTable, []db.BscTransac
 	block.GasLimit = Hex2int64(resp.Result.GasLimit)
 	block.GasUsed = Hex2int64(resp.Result.GasUsed)
 	block.Timestamp = Hex2int64(resp.Result.Timestamp)
-	log.Logger.Info(resp.Result.Number)
+	log.Logger.Debug(resp.Result.Number)
 	block.Number = Hex2int64(resp.Result.Number)
 	txs := BscRpcTx2Table(resp.Result.Transactions)
 	// TODO-----
@@ -214,6 +219,7 @@ func getLatestBlockFromDb(sql *gorm.DB, table string) int64 {
 	// row := db.BscDB.Table(table).Select("max(number)").Row()
 	// sql.Table(table).First(&block)
 	sql.Table(table).Order("number desc").First(&block)
+	// log.Logger.Info(block.Number)
 	return block.Number
 }
 
@@ -224,6 +230,7 @@ func GetBestRpc(hosts []string) string {
 	for _, host := range hosts {
 		var elapsed time.Duration
 		rpc := fmt.Sprintf("http://%s:8545", host)
+		log.Logger.Info(rpc)
 		start := time.Now()
 		body, err := web3.LatestBlockNumber(rpc)
 		if err != nil {

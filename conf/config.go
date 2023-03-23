@@ -1,9 +1,9 @@
 package conf
 
 import (
+	"fmt"
+	"os"
 	"time"
-
-	"github.com/60ke/trais/log"
 
 	"github.com/go-ini/ini"
 )
@@ -15,6 +15,7 @@ var (
 	TaskSetting       = &TaskConf{}
 	BscHosts          = &[]string{}
 	DownloaderSetting = &DownloaderConf{}
+	LogSetting        = &LogConf{}
 )
 
 // APPConf
@@ -26,6 +27,11 @@ type APPConf struct {
 type DownloaderConf struct {
 	BscStep int64
 	TMStep  int64
+}
+
+type LogConf struct {
+	Level string
+	File  string
 }
 
 type ServerConf struct {
@@ -62,7 +68,8 @@ func ConfInit(path string) {
 	var err error
 	cfg, err = ini.Load(path)
 	if err != nil {
-		log.Logger.Fatalf("setting.Setup, fail to parse 'conf.ini': %v", err)
+		fmt.Fprintf(os.Stderr, "setting.Setup, fail to parse 'conf.ini': %v", err)
+		os.Exit(1)
 	}
 
 	mapTo("app", APPSetting)
@@ -70,6 +77,7 @@ func ConfInit(path string) {
 	mapTo("database", DatabaseSetting)
 	mapTo("task", TaskSetting)
 	mapTo("downloader", DownloaderSetting)
+	mapTo("log", LogSetting)
 
 	rpcs := cfg.Section("cluster")
 
@@ -83,6 +91,7 @@ func ConfInit(path string) {
 func mapTo(section string, v interface{}) {
 	err := cfg.Section(section).MapTo(v)
 	if err != nil {
-		log.Logger.Fatalf("Cfg.MapTo %s err: %v", section, err)
+		fmt.Fprintf(os.Stderr, "Cfg.MapTo %s err: %v", section, err)
+		os.Exit(1)
 	}
 }
