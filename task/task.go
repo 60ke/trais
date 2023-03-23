@@ -18,11 +18,14 @@ func StartTask() {
 	c := cron.New()
 
 	updateBscBalance := conf.TaskSetting.UpdateBscBalance
+	handleFailBlock := conf.TaskSetting.HandleFailBlock
 	hosts := conf.BscHosts
 	c.AddFunc(updateBscBalance, func() {
 		UpdateBscAddress(*hosts)
 	})
-
+	c.AddFunc(handleFailBlock, func() {
+		HandleFailBlock(*hosts)
+	})
 	c.Start()
 }
 
@@ -72,17 +75,16 @@ func HandleFailBlock(hosts []string) {
 	var wg sync.WaitGroup
 
 	keys := downloader.FailedBlock.Keys()
-	results := make(chan downloader.GetBlockResult, len(keys))
+
 	bestRpc := downloader.GetBestRpc(hosts)
 	for _, key := range keys {
 		num := key.(int64)
 		wg.Add(1)
-		go func(key int64, results chan downloader.GetBlockResult) {
+		go func(num int64) {
 			defer wg.Done()
-			downloader.GetBscBlock(bestRpc, num, results)
-		}(num, results)
+			downloader.GetBscBlock(bestRpc, num)
+		}(num)
 	}
 
 	wg.Wait()
-	close(results)
 }

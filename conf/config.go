@@ -53,6 +53,7 @@ type TaskConf struct {
 	BscSync          string
 	TMSync           string
 	UpdateBscBalance string
+	HandleFailBlock  string
 }
 
 var cfg *ini.File

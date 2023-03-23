@@ -74,27 +74,17 @@ func SyncBsc(hosts []string) error {
 	}
 
 	// 开始追块
-	results := make(chan GetBlockResult, endNum-startNum+1)
+	// results := make(chan GetBlockResult, endNum-startNum+1)
 
 	for i := startNum; i <= endNum; i++ {
 		wg.Add(1)
-		go func(i int64, results chan GetBlockResult) {
+		go func(i int64) {
 			defer wg.Done()
-			GetBscBlock(bestRpc, i, results)
-		}(i, results)
+			GetBscBlock(bestRpc, i)
+		}(i)
 	}
 	wg.Wait()
-	close(results)
 
-	// 处理失败的块号
-	for result := range results {
-		if !result.Succ {
-			log.Logger.Warnf("get block failed: %d", result.BlockNum)
-			// FailedBlock.Add(result.BlockNum, nil)
-			// TODO addFailBlock,removeFail
-			// addFailBlock(result.BlockNum)
-		}
-	}
 	if latestNum-endNum < bscStep {
 		// 落后较少时,可以sleep一下减少资源占用
 		time.Sleep(1 * time.Second)
@@ -102,7 +92,7 @@ func SyncBsc(hosts []string) error {
 	return nil
 }
 
-func GetBscBlock(rpc string, num int64, results chan GetBlockResult) {
+func GetBscBlock(rpc string, num int64) {
 	// TODO 解析区块并存入数据库
 	// 使用LRU/缓存更新账户地址余额
 
@@ -127,8 +117,6 @@ func GetBscBlock(rpc string, num int64, results chan GetBlockResult) {
 			getBlockResult.Succ = true
 		}
 	}
-
-	results <- getBlockResult
 
 }
 
