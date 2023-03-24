@@ -145,12 +145,12 @@ func BscRpcBlock2Table(resp web3.BscRpcBlock) (db.BscBlockTable, []db.BscTransac
 	block.Timestamp = Hex2int64(resp.Result.Timestamp)
 	log.Logger.Debug(resp.Result.Number)
 	block.Number = Hex2int64(resp.Result.Number)
-	txs := BscRpcTx2Table(resp.Result.Transactions)
+	txs := BscRpcTx2Table(resp.Result.Transactions, block.Timestamp)
 	// TODO-----
 	return block, txs
 }
 
-func BscRpcTx2Table(txs []web3.BscRpcTransaction) []db.BscTransactionTable {
+func BscRpcTx2Table(txs []web3.BscRpcTransaction, timestamp int64) []db.BscTransactionTable {
 	var txTables []db.BscTransactionTable
 	for _, tx := range txs {
 		var txTable db.BscTransactionTable
@@ -158,7 +158,8 @@ func BscRpcTx2Table(txs []web3.BscRpcTransaction) []db.BscTransactionTable {
 		txTable.Gas = Hex2int64(tx.Gas)
 		txTable.GasPrice = Hex2int64(tx.GasPrice)
 		txTable.GasUsed = Hex2int64(tx.GasUsed)
-		txTable.Timestamp = Hex2int64(tx.Timestamp)
+		log.Logger.Info(tx)
+		txTable.Timestamp = timestamp
 		txTable.BlockNumber = Hex2int64(tx.BlockNumber)
 		txTable.TransactionIndex = Hex2int64(tx.TransactionIndex)
 		txTable.Nonce = Hex2int64(tx.Nonce)
